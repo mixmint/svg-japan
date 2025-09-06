@@ -48,7 +48,6 @@ class svgJapan {
             clientY: 0
         } )
 
-//console.log( this.opts, this.svg_data, this.regions, this.map_container, this.curX, this.curY )
         this.createMap().then(() => {
             // logger( 'SVG-map initialization completed successfully.', 'info' )
         })
@@ -56,78 +55,120 @@ class svgJapan {
 
     async createMap() {
         const map = await this._drawMap()
+        const self = this
 
-        let self = this
-
-        // Bind Events
         Array.prototype.forEach.call(map.querySelectorAll('path'), (prefecture) => {
+            prefecture.style.cursor = 'pointer'
+
+            // MOUSEOUT
             prefecture.addEventListener('mouseout', (evt) => {
-                if ( [ 'outline1','outline2' ].includes(evt.target.id) ) {
-                    return false
-                }
-                let rId = parseInt(evt.target.getAttribute('data-region'), 10)
-                if ( self.opts.regionality ) {
-                    Array.prototype.forEach.call(evt.target.parentNode.childNodes, (elm) => {
-                        if ( parseInt(elm.getAttribute('data-region'), 10) == rId ) {
+                const target = evt.target
+                if (['outline1', 'outline2'].includes(target.id)) return
+
+                const rId = parseInt(target.getAttribute('data-region'), 10)
+
+                if (self.opts.regionality) {
+                    Array.prototype.forEach.call(target.parentNode.childNodes, (elm) => {
+                        if (parseInt(elm.getAttribute('data-region'), 10) === rId) {
                             elm.setAttributeNS(null, 'fill', elm.getAttribute('data-default'))
                         }
                     })
                 }
-                evt.target.setAttributeNS(null, 'fill', evt.target.getAttribute('data-default'))
-                if ( evt.target.classList ) {
-                    evt.target.classList.remove('active')
+
+                target.setAttributeNS(null, 'fill', target.getAttribute('data-default'))
+
+                // IE11-safe remove class
+                if (target.classList) {
+                    target.classList.remove('active')
                 } else {
-                    // For ie11
-                    let _cls = evt.target.getAttribute('class').split(' ')
-                    if ( _cls.includes('active') ) {
-                        evt.target.setAttribute('class', _cls.filter((v) => v !== 'active').join(' '))
+                    let _cls = target.getAttribute('class').split(' ')
+                    if (_cls.includes('active')) {
+                        _cls = _cls.filter((v) => v !== 'active')
+                        target.setAttribute('class', _cls.join(' '))
                     }
                 }
+
                 self.showTips()
             }, false)
-                prefecture.addEventListener('mouseover', (evt) => {
-                if ( [ 'outline1','outline2' ].includes(evt.target.id) ) {
-                    return false
-                }
-                let cId = parseInt(evt.target.id.replace('pref-', ''), 10),
-                    rId = parseInt(evt.target.getAttribute('data-region'), 10),
-                    hoverColor = this.opts.activeColor || '#D70035'
-                if ( evt.target.classList ) {
-                    evt.target.classList.add('active')
+
+            // MOUSEOVER
+            prefecture.addEventListener('mouseover', (evt) => {
+                const target = evt.target
+                if (['outline1', 'outline2'].includes(target.id)) return
+
+                const cId = parseInt(target.id.replace('pref-', ''), 10)
+                const rId = parseInt(target.getAttribute('data-region'), 10)
+                const hoverColor = self.opts.activeColor || '#D70035'
+
+                if (target.classList) {
+                    target.classList.add('active')
                 } else {
-                    // For ie11
-                    let _cls = evt.target.getAttribute('class').split(' ')
-                    if ( ! _cls.includes('active') ) {
-                        _cls.push('active')
-                        evt.target.setAttribute('class', _cls.join(' '))
-                    }
+                    let _cls = target.getAttribute('class').split(' ')
+                    if (!_cls.includes('active')) _cls.push('active')
+                    target.setAttribute('class', _cls.join(' '))
                 }
-                evt.target.setAttributeNS(null, 'fill', hoverColor)
-                if ( self.opts.regionality ) {
-                    Array.prototype.forEach.call(evt.target.parentNode.childNodes, (elm) => {
-                        if ( parseInt(elm.getAttribute('data-region'), 10) == rId && cId != parseInt( elm.id.replace('pref-', ''), 10 ) ) {
-                            let _tmp = self.regions.find( ({ id }) => id == rId ),
-                                activeRegionColor = _tmp ? _tmp.active : null
-                            if ( self.opts.regions && self.opts.regions.length > 0 ) {
-                                let _rg = self.opts.regions.find( ({ id }) => id == rId )
-                                if ( _rg && hasProp( 'active', _rg ) ) {
+
+                target.setAttributeNS(null, 'fill', hoverColor)
+
+                if (self.opts.regionality) {
+                    Array.prototype.forEach.call(target.parentNode.childNodes, (elm) => {
+                        const elmPrefId = parseInt(elm.id.replace('pref-', ''), 10)
+                        if (parseInt(elm.getAttribute('data-region'), 10) === rId && elmPrefId !== cId) {
+                            let regionObj = self.regions.find((r) => r.id === rId)
+                            let activeRegionColor = regionObj ? regionObj.active : null
+
+                            if (self.opts.regions && self.opts.regions.length > 0) {
+                                let _rg = null
+                                for (let i = 0; i < self.opts.regions.length; i++) {
+                                    if (self.opts.regions[i].id === rId) {
+                                        _rg = self.opts.regions[i]
+                                        break
+                                    }
+                                }
+                                if (_rg && hasProp('active', _rg)) {
                                     activeRegionColor = _rg.active
                                 }
                             }
-                            if ( activeRegionColor ) {
-                                elm.setAttributeNS(null, 'fill', activeRegionColor)
-                            }
+
+                            if (activeRegionColor) elm.setAttributeNS(null, 'fill', activeRegionColor)
                         }
                     })
                 }
+
                 self.showTips()
             }, false)
-                prefecture.addEventListener('click', (evt) => {
-                if ( [ 'outline1','outline2' ].includes(evt.target.id) ) {
-                    return false
+
+            // CLICK
+            prefecture.addEventListener('click', (evt) => {
+                const target = evt.target
+                if (['outline1', 'outline2'].includes(target.id)) {
+                    return
                 }
-                self.selectedMap(evt.target)
-            }, false)
+
+                const prefId = parseInt(target.id.replace('pref-', ''), 10)
+                let linkData = null
+
+                if (self.opts.prefLinks && self.opts.prefLinks[prefId]) {
+                    linkData = self.opts.prefLinks[prefId]
+                } else if (self.opts.autoLinker) {
+                    let prefEntry = Object.entries(self.svg_data).find(([key, val]) => val.id === prefId)
+                    let key       = prefEntry[0]
+                    let prefData  = prefEntry[1]
+                    const slug    = key.toLowerCase().replace(/\s+/g, '-')
+                    const baseUrl = self.opts.autoLinkBaseUrl || '/'
+                    linkData      = { url: `${baseUrl.replace(/\/$/, '')}/${slug}`, target: "_self" }
+                }
+
+                if (linkData) {
+                    self._openPrefLink(linkData)
+                } else if (typeof self.opts.onPrefClick === "function") {
+                    self.opts.onPrefClick({
+                        id: prefId,
+                        name: self.svg_data[prefId].name,
+                        region: parseInt(target.getAttribute('data-region'), 10)
+                    })
+                }
+            })
         })
     }
 
@@ -139,7 +180,6 @@ class svgJapan {
             svgElm.setAttributeNS(null, 'version', '1.1')
             svgElm.setAttribute('xmlns', SVG_NAMESPACE)
             svgElm.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
-            //svgElm.setAttribute('xmlns:mapsvg', 'http://mapsvg.com')
             svgElm.setAttribute('id', `svg-japan-${mapType}`)
             svgElm.setAttributeNS(null, 'x', '0px')
             svgElm.setAttributeNS(null, 'y', '0px')
@@ -164,7 +204,6 @@ class svgJapan {
                         fillColor = this.opts.prefColors[key]
                     }
                 }
-//console.log( '_drawMap:', regionId, fillColor, Object.keys(this.opts.prefColors).length )
 
                 pathElm.setAttributeNS(null, 'id', `pref-${this.svg_data[key].id}`)
                 pathElm.setAttributeNS(null, 'data-region', regionId)
@@ -179,6 +218,7 @@ class svgJapan {
                     // For ie11
                     pathElm.setAttribute('class', 'prefecture-map')
                 }
+
                 svgElm.appendChild(pathElm)
             })
             let strokeLayer = document.createElementNS(SVG_NAMESPACE, 'g')
@@ -213,7 +253,7 @@ class svgJapan {
                 divPath.setAttributeNS(null, 'points', this.svg_atts.strokes.divider.points[mapType])
                 strokeLayer.appendChild(divPath)
             }
-            if ( strokeLayer.hasChildNodes ) {
+            if ( strokeLayer.hasChildNodes() ) {
                 if ( svgElm.prepend ) {
                     svgElm.prepend(strokeLayer)
                 } else {
@@ -221,9 +261,16 @@ class svgJapan {
                 }
             }
             svgElm.style.position = 'relative'
+
             svgElm.addEventListener('mousemove', (evt) => {
-                this.curX = evt.x//evt.offsetX
-                this.curY = evt.y//evt.offsetY
+                this.curX = evt.clientX
+                this.curY = evt.clientY
+
+                const tips = document.getElementById('svg-japan-tips')
+                if (tips) {
+                    tips.style.left = `${this.curX + 10}px`
+                    tips.style.top  = `${this.curY + 10}px`
+                }
             }, false)
 
             if ( this.opts.height ) {
@@ -240,59 +287,89 @@ class svgJapan {
         })
     }
 
-    showTips() {
-        if ( ! this.opts.withTips ) {
-            return
-        }
-        let _activePath = this.map_container.querySelector('path.active'),
-            activePref = null,//_activePath ? _activePath.dataset : null,
-            contents = []
-        if ( _activePath && ! activePref && _activePath.getAttribute('data-name') ) {
-            // For all within ie11
-            activePref = {
-                region: parseInt( _activePath.getAttribute('data-region'), 10 ),
-                name: _activePath.getAttribute('data-name'),
-                default: _activePath.getAttribute('data-default'),
-            }
-        }
-        if ( activePref ) {
-            const tips = document.createElement('div')
-            tips.id = 'svg-japan-tips'
-            if ( tips.classList ) {
-                tips.classList.add('svg-map-tips')
-            } else {
-                tips.setAttribute('class', 'svg-map-tips')
-            }
-            if ( this.opts.regionality ) {
-                let regionList = this.opts.regions || this.regions,
-                    _match = regionList.find( ({ id }) => id == activePref.region ),
-                    regionName = _match ? _match.name : null
-                if ( regionName ) {
-                    contents.push( `<span class="region-name">${regionName}</span>` )
-                }
-            }
-            if ( hasProp( 'name', activePref ) ) {
-                contents.push( `<span class="prefecture-name">${activePref.name}</span>` )
-            }
-            tips.innerHTML = contents.join( "\n" )
-            tips.style.position = 'absolute'
-            this.map_container.appendChild(tips)
-            let _cs = window.getComputedStyle( this.map_container ),
-                _posX = this.curX - this.map_container.offsetLeft + (parseInt(_cs.getPropertyValue('font-size'), 10) * 2),
-                _posY = this.curY - this.map_container.offsetTop - (parseInt(_cs.getPropertyValue('font-size'), 10) * 2)
-//console.log( [ this.map_container ], _posX, _posY )
-            tips.style.left = `${_posX}px`
-            tips.style.top  = `${_posY}px`
-            tips.style.visibility = 'visible'
+    _openPrefLink(linkData) {
+        let url, target, rel
+        if (typeof linkData === "string") {
+            url    = linkData
+            target = "_self"
         } else {
-            const targetTips = document.getElementById('svg-japan-tips')
-            targetTips.style.visibility = 'hidden'
-            targetTips.parentNode.removeChild(targetTips)
+            url    = linkData.url
+            target = linkData.target || "_self"
+            rel    = linkData.rel || null
         }
+
+        const allowedTargets = ["_self", "_blank", "_parent", "_top"]
+        if (!allowedTargets.includes(target)) {
+            target = "_self"
+        }
+
+        const allowedRels = ["alternate","author","bookmark","external","help","license","me","next","nofollow","noopener","noreferrer","prefetch","prev","search","sponsored","tag","ugc"]
+        if (rel && !allowedRels.includes(rel)) {
+            rel = null
+        }
+
+        if (target === "_blank" && !rel) {
+            rel = "noopener noreferrer"
+        }
+
+        const finalUrl = new URL(url, window.location.href).href
+        const a        = document.createElement("a")
+        a.href         = finalUrl
+        a.target       = target
+
+        if (rel) {
+            a.rel = rel
+        }
+
+        a.style.display = "none"
+        document.body.appendChild(a)
+
+        a.click()
+        document.body.removeChild(a)
     }
 
+    showTips() {
+        if (!this.opts.withTips) return
+
+        const _activePath = this.map_container.querySelector('path.active')
+        if (!_activePath) {
+            const targetTips = document.getElementById('svg-japan-tips')
+            if (targetTips) targetTips.remove()
+            return
+        }
+
+        const activePref = {
+            region: parseInt(_activePath.getAttribute('data-region'), 10),
+            name: _activePath.getAttribute('data-name'),
+            default: _activePath.getAttribute('data-default')
+        }
+
+        let contents = []
+
+        if (this.opts.regionality) {
+            const regionList = this.opts.regions || this.regions
+            const _match = regionList.find(({ id }) => id === activePref.region)
+            if (_match) contents.push(`<span class="region-name">${_match.name}</span>`)
+        }
+
+        if (activePref.name) contents.push(`<span class="prefecture-name">${activePref.name}</span>`)
+
+        let tips = document.getElementById('svg-japan-tips')
+        if (!tips) {
+            tips = document.createElement('div')
+            tips.id = 'svg-japan-tips'
+            tips.classList.add('svg-map-tips')
+            tips.style.position = 'fixed'
+            tips.style.pointerEvents = 'none'
+            document.body.appendChild(tips)
+        }
+
+        tips.innerHTML = contents.join("\n")
+        tips.style.visibility = 'visible'
+    }
+
+
     selectedMap( element ) {
-        //logger( [ 'selectedMap:', element ], 'log' )
         element.dispatchEvent( this.svgJapanEvent )
     }
 
